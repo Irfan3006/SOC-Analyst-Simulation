@@ -4,7 +4,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const body = document.body;
 
     let currentTheme = 'dark';
-
     if (localStorage.getItem('theme')) {
         currentTheme = localStorage.getItem('theme');
         if (currentTheme === 'light') {
@@ -31,79 +30,52 @@ document.addEventListener('DOMContentLoaded', () => {
     const liveLogTable = document.getElementById('live-log-table');
     const btnSimulate = document.getElementById('btn-simulate');
 
-    const updateStats = (stats) => {
-        document.getElementById('stat-total-logs').innerText = stats.total_logs;
-        document.getElementById('stat-real-threats').innerText = stats.threats_detected;
-        document.getElementById('stat-auto-reports').innerText = stats.reports_generated;
+    const state = {
+        logs: [],
+        reportedIds: new Set(),
+        logIds: new Set(),
+        stats: {
+            total_logs: 0,
+            threats_detected: 0,
+            false_positives: 0,
+            reports_generated: 0,
+            manual_reports: 0
+        }
+    };
+
+    const updateStatsDisplay = () => {
+        document.getElementById('stat-total-logs').innerText = state.stats.total_logs;
+        document.getElementById('stat-real-threats').innerText = state.stats.threats_detected;
+        document.getElementById('stat-auto-reports').innerText = state.stats.reports_generated;
         if (document.getElementById('stat-manual-reports')) {
-            document.getElementById('stat-manual-reports').innerText = stats.manual_reports;
+            document.getElementById('stat-manual-reports').innerText = state.stats.manual_reports;
         }
     };
-
-    const fetchLogs = async () => {
-        try {
-            const res = await fetch('/api/logs');
-            const logs = await res.json();
-            logs.forEach(log => {
-                if (!logIds.has(log.id)) {
-                    logIds.add(log.id);
-                    renderLog(log);
-                }
-            });
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
-    const fetchReports = async () => {
-        try {
-            const res = await fetch('/api/reports');
-            const reports = await res.json();
-            reports.forEach(report => {
-                if (!reportedIds.has(report.id)) {
-                    reportedIds.add(report.id);
-                }
-            });
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
-    const fetchStats = async () => {
-        try {
-            const res = await fetch('/api/stats');
-            const stats = await res.json();
-            updateStats(stats);
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
-    let reportedIds = new Set();
-    let logIds = new Set();
-    let currentLogIdForReport = null;
 
     const formatSeverity = (sev) => {
-        const classes = {
-            'Critical': 'badge-critical',
-            'High': 'badge-high',
-            'Medium': 'badge-medium',
-            'Low': 'badge-low'
-        };
-        const iconClasses = {
-            'Critical': 'fa-skull-crossbones',
-            'High': 'fa-fire',
-            'Medium': 'fa-exclamation-triangle',
-            'Low': 'fa-info-circle'
-        };
+        const classes = { 'Critical': 'badge-critical', 'High': 'badge-high', 'Medium': 'badge-medium', 'Low': 'badge-low' };
+        const iconClasses = { 'Critical': 'fa-skull-crossbones', 'High': 'fa-fire', 'Medium': 'fa-exclamation-triangle', 'Low': 'fa-info-circle' };
         return `<span class="badge ${classes[sev]}"><i class="fa-solid ${iconClasses[sev]} me-1"></i>${sev}</span>`;
     };
 
     const formatThreatType = (type) => {
         let icon = 'fa-bug';
-        if (type === 'DDoS') icon = 'fa-network-wired';
-        if (type === 'Brute Force') icon = 'fa-key';
-        if (type === 'Malware Activity') icon = 'fa-spider';
+        if (type.includes('Phishing')) icon = 'fa-money-bill';
+        if (type.includes('Ransomware') || type.includes('Exfiltration')) icon = 'fa-lock';
+        if (type.includes('DDoS')) icon = 'fa-network-wired';
+        if (type.includes('APT') || type.includes('Persistent')) icon = 'fa-user-secret';
+        if (type.includes('Supply Chain')) icon = 'fa-link-slash';
+        if (type.includes('Cloud') || type.includes('S3')) icon = 'fa-cloud-showers-water';
+        if (type.includes('API')) icon = 'fa-gears';
+        if (type.includes('MFA') || type.includes('Auth')) icon = 'fa-shield-halved';
+        if (type.includes('Ticket') || type.includes('Directory')) icon = 'fa-ticket-simple';
+        if (type.includes('Escape') || type.includes('Breakout')) icon = 'fa-door-open';
+        if (type.includes('Memory') || type.includes('Zero-Day')) icon = 'fa-microchip';
+        if (type.includes('Credential') || type.includes('Password') || type.includes('Brute')) icon = 'fa-key';
+        if (type.includes('Lateral') || type.includes('Movement')) icon = 'fa-arrows-left-right';
+        if (type.includes('Webhook') || type.includes('DNS')) icon = 'fa-route';
+        if (type.includes('SQL') || type.includes('Cross-Site')) icon = 'fa-code';
+        
         return `<i class="fa-solid ${icon} me-2"></i><strong>${type}</strong>`;
     };
 
@@ -118,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let typeColorClass = log.is_false_positive ? 'text-fp' : (log.severity === 'Critical' ? 'text-critical' : (log.severity === 'High' ? 'text-high' : (log.severity === 'Medium' ? 'text-medium' : 'text-low')));
 
         row.className = rowBgClass;
-
         let actionBtn = (log.severity === 'Critical' || log.severity === 'High' || log.severity === 'Medium') ? `<button class="btn btn-sm btn-outline-primary py-0" onclick="window.openReportModal(${log.id})"><i class="fa-solid fa-file-pdf"></i> Gen</button>` : `<span class="text-muted small"><i class="fa-solid fa-minus"></i></span>`;
 
         row.innerHTML = `
@@ -141,6 +112,20 @@ document.addEventListener('DOMContentLoaded', () => {
         while (liveLogTable.children.length > 50) liveLogTable.removeChild(liveLogTable.lastChild);
     };
 
+    const addLogToState = (log) => {
+        if (state.logIds.has(log.id)) return;
+        state.logIds.add(log.id);
+        state.logs.unshift(log);
+        if (state.logs.length > 50) state.logs.pop();
+
+        state.stats.total_logs += 1;
+        if (log.is_false_positive) state.stats.false_positives += 1;
+        else state.stats.threats_detected += 1;
+
+        renderLog(log);
+        updateStatsDisplay();
+    };
+
     btnSimulate.addEventListener('click', async () => {
         try {
             const originalIcon = btnSimulate.innerHTML;
@@ -149,12 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const res = await fetch('/api/generate_log', { method: 'POST' });
             const data = await res.json();
-
-            updateStats(data.stats);
-            if (!logIds.has(data.log.id)) {
-                logIds.add(data.log.id);
-                renderLog(data.log);
-            }
+            if (data.status === 'success') addLogToState(data.log);
 
             setTimeout(() => {
                 btnSimulate.innerHTML = originalIcon;
@@ -178,6 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const pdfContentArea = document.getElementById('pdfContentArea');
     const pdfPrintableArea = document.getElementById('pdfPrintableArea');
 
+    let currentLogIdForReport = null;
+
     window.openReportModal = (logId) => {
         currentLogIdForReport = logId;
         modalIncidentId.innerText = `#${logId}`;
@@ -190,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const getManualTemplate = (log) => {
-        return `Laporan Keamanan Manual\nID Insiden: #${log.id}\nWaktu: ${log.timestamp}\n\nRingkasan Insiden\n- Tipe Serangan: ${log.type}\n- Target System: ${log.target}\n- Source IP: ${log.source}\n- Severity: ${log.severity}\n- Confidence Score: ${log.confidence_score}%\n\nAnalisis Teknikal\n...\n\nLangkah Mitigasi\n-\n-\n-\n\nKesimpulan\n...\n`;
+        return `Manual Security Report\nIncident ID: #${log.id}\nTimestamp: ${log.timestamp}\n\nIncident Summary\n- Attack Type: ${log.type}\n- Target System: ${log.target}\n- Source IP: ${log.source}\n- Severity: ${log.severity}\n- Confidence Score: ${log.confidence_score}%\n\nTechnical Analysis\n...\n\nMitigation Steps\n-\n-\n-\n\nConclusion\n...\n`;
     };
 
     const processReport = async (type, manualContent = null) => {
@@ -198,18 +180,25 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('btnGenManual').disabled = true;
         if (type === 'standard') loadingView.style.display = 'block';
 
+        const logData = state.logs.find(l => l.id === currentLogIdForReport);
+        if (!logData) return;
+
         try {
             const res = await fetch('/api/generate_ondemand_report', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ log_id: currentLogIdForReport, type, manual_content: manualContent })
+                body: JSON.stringify({ log_data: logData, type, manual_content: manualContent })
             });
             const data = await res.json();
 
             if (data.status === 'success') {
-                updateStats(data.stats);
+                if (type === 'manual') state.stats.manual_reports += 1;
+                else state.stats.reports_generated += 1;
+                updateStatsDisplay();
+
                 pdfContentArea.innerHTML = marked.parse(data.report.content);
-                if (!reportedIds.has(data.report.id)) reportedIds.add(data.report.id);
+                if (!state.reportedIds.has(data.report.id)) state.reportedIds.add(data.report.id);
+
                 selectionView.style.display = 'none';
                 manualView.style.display = 'none';
                 resultView.style.display = 'block';
@@ -225,18 +214,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     document.getElementById('btnGenStandard').addEventListener('click', () => processReport('standard'));
-    document.getElementById('btnGenManual').addEventListener('click', async () => {
-        try {
-            const res = await fetch('/api/logs');
-            const logs = await res.json();
-            const log = logs.find(l => l.id === currentLogIdForReport);
-            if (log) {
-                manualEditor.value = getManualTemplate(log);
-                selectionView.style.display = 'none';
-                manualView.style.display = 'block';
-            }
-        } catch (err) {
-            alert(err);
+    document.getElementById('btnGenManual').addEventListener('click', () => {
+        const log = state.logs.find(l => l.id === currentLogIdForReport);
+        if (log) {
+            manualEditor.value = getManualTemplate(log);
+            selectionView.style.display = 'none';
+            manualView.style.display = 'block';
         }
     });
 
@@ -248,7 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnSubmitManual').addEventListener('click', () => {
         const content = manualEditor.value;
         if (!content.trim()) {
-            alert("Konten laporan tidak boleh kosong.");
+            alert("Report content cannot be empty.");
             return;
         }
         processReport('manual', content);
@@ -266,17 +249,11 @@ document.addEventListener('DOMContentLoaded', () => {
         html2pdf().set(opt).from(pdfPrintableArea).save();
     });
 
-    fetchStats();
-    fetchLogs();
-    fetchReports();
+    updateStatsDisplay();
 
     setInterval(() => {
         fetch('/api/generate_log', { method: 'POST' }).then(res => res.json()).then(data => {
-            updateStats(data.stats);
-            if (!logIds.has(data.log.id)) {
-                logIds.add(data.log.id);
-                renderLog(data.log);
-            }
+            if (data.status === 'success') addLogToState(data.log);
         }).catch(err => console.error(err));
     }, 4000);
 });

@@ -5,57 +5,6 @@ from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from dotenv import load_dotenv
 
-class SOCDataStore:
-    def __init__(self, max_logs=50, max_reports=20):
-        self._max_logs = max_logs
-        self._max_reports = max_reports
-        self._log_history = []
-        self._auto_reports = []
-        self._stats = {
-            "total_logs": 0,
-            "threats_detected": 0,
-            "false_positives": 0,
-            "reports_generated": 0,
-            "manual_reports": 0
-        }
-
-    def add_log(self, log):
-        self._log_history.insert(0, log)
-        if len(self._log_history) > self._max_logs:
-            self._log_history.pop()
-
-        self._stats["total_logs"] += 1
-        if log["is_false_positive"]:
-            self._stats["false_positives"] += 1
-        else:
-            self._stats["threats_detected"] += 1
-
-    def get_log_by_id(self, log_id):
-        return next((log for log in self._log_history if log["id"] == log_id), None)
-
-    def add_report(self, report):
-        self._auto_reports.insert(0, report)
-        if report.get("is_manual"):
-            self._stats["manual_reports"] += 1
-        else:
-            self._stats["reports_generated"] += 1
-            
-        if len(self._auto_reports) > self._max_reports:
-            self._auto_reports.pop()
-
-    @property
-    def logs(self):
-        return self._log_history
-    
-    @property
-    def reports(self):
-        return self._auto_reports
-    
-    @property
-    def stats(self):
-        return self._stats
-
-
 class SOCSimulator:
     def __init__(self):
         self._threat_types = [
@@ -63,7 +12,17 @@ class SOCSimulator:
             "Cross-Site Scripting (XSS)", "Phishing Attempt", "Ransomware Distribution",
             "Unauthorized Login", "Data Exfiltration", "Port Scanning",
             "Man-in-the-Middle (MITM)", "Zero-Day Exploit", "DNS Poisoning",
-            "Botnet Command & Control", "Privilege Escalation"
+            "Botnet Command & Control", "Privilege Escalation",
+            "Advanced Persistent Threat (APT)", "Supply Chain Compromise", 
+            "AI-Driven Phishing", "Ransomware-as-a-Service (RaaS)", 
+            "Zero-Day Remote Code Execution", "Business Email Compromise (BEC)",
+            "Cloud Storage Exfiltration", "MFA Fatigue Attack",
+            "API Broken Object Authorization", "Kerberoasting (Active Directory)",
+            "Golden Ticket Forge", "Living off the Land (LotL)",
+            "DNS Tunneling Exfiltration", "In-Memory Malware Injection",
+            "Credential Stuffing Attack", "Lateral Movement (SMB Relay)",
+            "Data Exfiltration via Webhooks", "Kubernetes Namespace Escape",
+            "Docker Container Breakout", "UAC Bypass Escalation"
         ]
         
         self._ips = self._generate_ips(100)
@@ -71,7 +30,10 @@ class SOCSimulator:
         self._targets = [
             "SSH Server (Port 22)", "Web Server (Port 443)", "Database Server (Port 3306)", 
             "Mail Server (Port 587)", "Active Directory", "Internal ERP System",
-            "Customer Database", "Cloud Storage Gateway", "HR Information System"
+            "Customer Database", "Cloud Storage Gateway", "HR Information System",
+            "AWS S3 Bucket (Production Data)", "Azure AD (Authentication)", 
+            "Kubernetes Control Plane", "Jenkins CI/CD Pipeline",
+            "Employee Laptop (Remote/VPN)", "IoT Terminal Gateway"
         ]
 
     def _generate_ips(self, count):
@@ -102,7 +64,7 @@ class SOCSimulator:
                 confidence_score = random.randint(10, 45)
         
         if not is_false_positive:
-            confidence_score = random.randint(65, 99)
+            confidence_score = random.randint(30, 99)
             
         severity = "Low"
         if confidence_score > 90:
@@ -136,89 +98,68 @@ class SOCDashboardApp:
     def __init__(self):
         self.app = Flask(__name__)
         load_dotenv()
-        self.store = SOCDataStore()
         self.simulator = SOCSimulator()
         self._register_routes()
 
     @staticmethod
     def generate_standard_report(log_data):
         return f"""
-# Laporan Insiden Keamanan Sistem
-*(Di-generate secara Otomatis via SIEM Engine)*
+# System Security Incident Report
+*(Automatically Generated via SIEM Engine)*
 
-### Metadata Insiden
-- **Nomor ID Insiden**: #{log_data['id']}
-- **Waktu Terdeteksi**: {log_data['timestamp']}
-- **Tingkat Keparahan (Severity)**: {log_data['severity']}
+### Incident Metadata
+- **Incident ID**: #{log_data['id']}
+- **Detection Time**: {log_data['timestamp']}
+- **Severity Level**: {log_data['severity']}
 
-### Informasi Ancaman
-- **Tipe Serangan**: {log_data['type']}
+### Threat Information
+- **Attack Type**: {log_data['type']}
 - **Target System**: {log_data['target']}
 
-### Detail Jaringan
-- **IP Sumber (Attacker)**: `{log_data['source']}`
+### Network Details
+- **Source IP (Attacker)**: `{log_data['source']}`
 
-### Evaluasi Keamanan
-- **Status Identifikasi**: {'False Positive' if log_data['is_false_positive'] else 'True Positive'}
+### Security Evaluation
+- **Identification Status**: {'False Positive' if log_data['is_false_positive'] else 'True Positive'}
 - **Confidence Score**: {log_data['confidence_score']}%
 
 ***
-**Kesimpulan Standar:** Segera lakukan pemblokiran IP source pada firewall dan pantau aktivitas tidak wajar pada sistem target.
+**Technical Summary:** Immediately initiate firewall blocking for the source IP and monitor anomalous activity on the target system.
         """
 
     def _register_routes(self):
         self.app.add_url_rule('/', 'index', self.render_index)
         self.app.add_url_rule('/api/generate_log', 'api_generate_log', self.api_generate_log, methods=['POST'])
         self.app.add_url_rule('/api/generate_ondemand_report', 'api_generate_ondemand_report', self.api_generate_ondemand_report, methods=['POST'])
-        self.app.add_url_rule('/api/logs', 'api_get_logs', self.api_get_logs)
-        self.app.add_url_rule('/api/reports', 'api_get_reports', self.api_get_reports)
-        self.app.add_url_rule('/api/stats', 'api_get_stats', self.api_get_stats)
 
     def render_index(self):
         return render_template('index.html')
 
     def api_generate_log(self):
         log = self.simulator.generate_telemetry_log()
-        self.store.add_log(log)
-        return jsonify({"status": "success", "log": log, "stats": self.store.stats})
+        return jsonify({"status": "success", "log": log})
 
     def api_generate_ondemand_report(self):
         data = request.json
-        log_id = data.get("log_id")
+        log_data = data.get("log_data")
         report_type = data.get("type", "standard")
         manual_content = data.get("manual_content")
         
-        log_data = self.store.get_log_by_id(log_id)
         if not log_data:
-            return jsonify({"status": "error", "message": "Log not found"}), 404
+            return jsonify({"status": "error", "message": "Log data not provided"}), 400
 
         if report_type == "manual" and manual_content:
             report_text = manual_content
-            is_manual = True
         else:
             report_text = self.generate_standard_report(log_data)
-            is_manual = False
             
-        report_obj = {
-            "id": log_data["id"],
-            "timestamp": log_data["timestamp"],
-            "threat_type": log_data["type"],
-            "severity": log_data["severity"],
-            "content": report_text,
-            "is_manual": is_manual
-        }
-        
-        self.store.add_report(report_obj)
-        return jsonify({"status": "success", "report": report_obj, "stats": self.store.stats})
-
-    def api_get_logs(self):
-        return jsonify(self.store.logs)
-
-    def api_get_reports(self):
-        return jsonify(self.store.reports)
-
-    def api_get_stats(self):
-        return jsonify(self.store.stats)
+        return jsonify({
+            "status": "success", 
+            "report": {
+                "id": log_data["id"],
+                "content": report_text
+            }
+        })
 
     def run(self, port=5000):
         debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() in ('true', '1', 't')
