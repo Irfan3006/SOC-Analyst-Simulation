@@ -172,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const getManualTemplate = (log) => {
-        return `Manual Security Report\nIncident ID: #${log.id}\nTimestamp: ${log.timestamp}\n\nIncident Summary\n- Attack Type: ${log.type}\n- Target System: ${log.target}\n- Source IP: ${log.source}\n- Severity: ${log.severity}\n- Confidence Score: ${log.confidence_score}%\n\nTechnical Analysis\n...\n\nMitigation Steps\n-\n-\n-\n\nConclusion\n...\n`;
+        return `Manual Security Report\nIncident ID: #${log.id}\nTimestamp: ${log.timestamp}\n\nIncident Summary\n- Attack Type: ${log.type}\n- Target System: ${log.target}\n- Source IP: ${log.source}\n- Severity: ${log.severity}\n- Confidence Score: ${log.confidence_score}%\n\nTechnical Analysis\n...\n\nMitigation Steps\n- \n- \n- \n\nConclusion\n...\n`;
     };
 
     const processReport = async (type, manualContent = null) => {
